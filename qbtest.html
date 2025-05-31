@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enkel ADHD-test Klon</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            /* Använd kolumn för att stapla element vertikalt */
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f0f0f0;
+            margin: 0;
+            overflow-x: hidden;
+            /* Förhindra horisontell scrollbar */
+        }
+
+        #container {
+            text-align: center;
+            background-color: #fff;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            /* Lägg till marginal mellan container och diagram */
+            width: 90%;
+            /* Ge container en bredd */
+            max-width: 600px;
+            /* Begränsa maxbredden */
+        }
+
+        #stimulus-display {
+            width: 200px;
+            height: 200px;
+            border: 2px solid #ccc;
+            margin: 0 auto 30px auto;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 8em;
+            /* Adjust for shapes */
+            color: black;
+            /* Default color, will be overridden */
+        }
+
+        #instructions {
+            margin-bottom: 20px;
+            font-size: 1.1em;
+            color: #333;
+        }
+
+        .control-group {
+            margin-bottom: 15px;
+        }
+
+        .control-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 1em;
+            color: #555;
+        }
+
+        .control-group input[type="number"] {
+            padding: 8px;
+            font-size: 1em;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            width: 80px;
+            /* Make it a bit wider */
+            text-align: center;
+        }
+
+        .control-group input[type="number"]:disabled {
+            background-color: #e9e9e9;
+            cursor: not-allowed;
+        }
+
+        #start-button {
+            padding: 12px 25px;
+            font-size: 1.2em;
+            cursor: pointer;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.2s ease-in-out;
+        }
+
+        #start-button:hover {
+            background-color: #0056b3;
+        }
+
+        #score-display {
+            margin-top: 20px;
+            font-size: 1.2em;
+            color: #555;
+            display: none;
+            /* Hidden until test ends */
+        }
+
+        .correct {
+            border-color: green !important;
+            background-color: #e6ffe6;
+        }
+
+        .incorrect {
+            border-color: red !important;
+            background-color: #ffe6e6;
+        }
+
+        #chart-container {
+            margin-top: 40px;
+            width: 80%;
+            /* Bredden på diagrammet */
+            max-width: 800px;
+            /* Maxbredd för diagrammet */
+            height: 400px;
+            /* Ange en fast höjd för diagramcontainern */
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            /* display: none;  Vi kommer att hantera synligheten via JavaScript */
+        }
+
+        #reactionTimeChart {
+            width: 100% !important;
+            /* Säkerställ att canvasen fyller sin container */
+            height: 100% !important;
+            /* Säkerställ att canvasen fyller sin container */
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container">
+        <h1>Enkel Uppmärksamhetsuppgift</h1>
+        <div id="instructions">
+            <p>När testet startar kommer former att visas en efter en.</p>
+            <p><strong>Tryck på MELLANSLAG endast när du ser samma form och färg upprepas i följd.</strong></p>
+            <p>Försök att vara så snabb och korrekt som möjligt.</p>
+        </div>
+
+        <div class="control-group">
+            <label for="test-duration-minutes">Testlängd (minuter):</label>
+            <input type="number" id="test-duration-minutes" value="1" min="1" max="10">
+        </div>
+
+        <button id="start-button">Starta Test</button>
+        <div id="stimulus-display"></div>
+        <div id="score-display">
+            <p>Rätta svar: <span id="correct-count">0</span></p>
+            <p>Felaktiga svar: <span id="incorrect-count">0</span></p>
+            <p>Missade mål: <span id="missed-count">0</span></p>
+        </div>
+    </div>
+
+    <div id="chart-container">
+        <h2>Reaktionstid över Tid</h2>
+        <canvas id="reactionTimeChart"></canvas>
+    </div>
+
+    <script>
+        $(document).ready(function () {
+            const stimulusDisplay = $('#stimulus-display');
+            const startButton = $('#start-button');
+            const instructions = $('#instructions');
+            const scoreDisplay = $('#score-display');
+            const correctCountSpan = $('#correct-count');
+            const incorrectCountSpan = $('#incorrect-count');
+            const missedCountSpan = $('#missed-count');
+            const testDurationMinutesInput = $('#test-duration-minutes');
+            const chartContainer = $('#chart-container'); // Referens till diagram-containern
+
+            const shapes = ['&#9679;', '&#9632;']; // Cirkel, Fyrkant (Unicode characters)
+            const colors = ['red', 'blue'];
+
+            const displayDuration = 1000; // Hur länge symbolen visas (ms)
+            const interStimulusInterval = 1000; // Hur länge displayen är tom mellan symboler (ms)
+
+            let testDuration = 60000; // Standard testtid i ms (1 minut), kommer att uppdateras från input
+            const targetProbability = 0.3; // Probability of a target appearing
+
+            let currentShape = '';
+            let currentColor = '';
+            let previousShape = '';
+            let previousColor = '';
+            let isTarget = false;
+            let testRunning = false;
+            let timeoutId;
+            let testTimerId;
+
+            let correctResponses = 0;
+            let incorrectResponses = 0;
+            let missedTargets = 0;
+            let targetOccurredThisRound = false;
+
+            let stimulusShownTime = 0; // Tidpunkt då stimulus senast visades
+            let testStartTime = 0; // Tidpunkt då testet startade
+
+            // Data för diagrammet
+            let chartDataCorrect = []; // För reaktionstider för korrekta svar
+            let chartDataIncorrect = []; // För reaktionstider för felaktiga svar
+            let reactionChart; // Variabel för att hålla Chart.js-instansen
+
+            // --- Diagramfunktioner ---
+            function createChart() {
+                // Förstör befintligt diagram om det finns ett för att undvika dubbla diagram på samma canvas
+                if (reactionChart) {
+                    reactionChart.destroy();
+                }
+
+                const ctx = document.getElementById('reactionTimeChart').getContext('2d');
+                reactionChart = new Chart(ctx, {
+                    type: 'scatter', // Punktdiagram är bäst för detta
+                    data: {
+                        datasets: [
+                            {
+                                label: 'Rätta Svar',
+                                data: chartDataCorrect,
+                                backgroundColor: 'rgba(75, 192, 192, 0.6)',
+                                borderColor: 'rgba(75, 192, 192, 1)',
+                                borderWidth: 1,
+                                pointRadius: 5,
+                                pointHoverRadius: 8,
+                            },
+                            {
+                                label: 'Felaktiga Svar',
+                                data: chartDataIncorrect,
+                                backgroundColor: 'rgba(255, 99, 132, 0.6)',
+                                borderColor: 'rgba(255, 99, 132, 1)',
+                                borderWidth: 1,
+                                pointRadius: 5,
+                                pointHoverRadius: 8,
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false, // Låt diagrammet fylla containern
+                        scales: {
+                            x: {
+                                type: 'linear',
+                                position: 'bottom',
+                                title: {
+                                    display: true,
+                                    text: 'Tid i Test (sekunder)'
+                                },
+                                min: 0,
+                                max: testDuration / 1000 // Diagrammets X-axel max utifrån testlängd
+                            },
+                            y: {
+                                title: {
+                                    display: true,
+                                    text: 'Reaktionstid (ms)'
+                                },
+                                min: 0,
+                                max: 1500 // Max reaktionstid för Y-axel, justera vid behov
+                            }
+                        },
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    label: function (context) {
+                                        let label = context.dataset.label || '';
+                                        if (label) {
+                                            label += ': ';
+                                        }
+                                        if (context.parsed.y !== null) {
+                                            label += context.parsed.y + 'ms @ ' + context.parsed.x.toFixed(1) + 's';
+                                        }
+                                        return label;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            function updateChart() {
+                if (reactionChart) {
+                    reactionChart.data.datasets[0].data = chartDataCorrect;
+                    reactionChart.data.datasets[1].data = chartDataIncorrect;
+                    reactionChart.options.scales.x.max = testDuration / 1000; // Uppdatera X-axelns maxvärde
+                    reactionChart.update();
+                }
+            }
+
+            // --- Stimulus & Test Logik ---
+            function getRandomStimulus() {
+                const shape = shapes[Math.floor(Math.random() * shapes.length)];
+                const color = colors[Math.floor(Math.random() * colors.length)];
+                return { shape, color };
+            }
+
+            function displayStimulus() {
+                if (!testRunning) return;
+
+                // 1. Bedöm den föregående stimulusen om den var en target men inte besvarad
+                if (isTarget && !targetOccurredThisRound) {
+                    missedTargets++;
+                    updateScoreDisplay();
+                }
+
+                // 2. Återställ flags för den nya omgången av stimulus
+                targetOccurredThisRound = false;
+                isTarget = false;
+
+                // 3. Hämta en potentiellt ny slumpmässig stimulus
+                let newStimulus = getRandomStimulus();
+
+                // 4. Bestäm om denna NYA stimulus är ett MÅL
+                if (previousShape && previousColor && previousShape === newStimulus.shape && previousColor === newStimulus.color) {
+                    isTarget = true;
+                } else if (previousShape && previousColor && Math.random() < targetProbability) {
+                    newStimulus = { shape: previousShape, color: previousColor };
+                    isTarget = true;
+                }
+
+                // 5. Uppdatera den visade symbolen
+                currentShape = newStimulus.shape;
+                currentColor = newStimulus.color;
+
+                stimulusDisplay.removeClass('correct incorrect').css('color', currentColor).html(currentShape);
+
+                // Spara tidpunkten då stimulusen visades för reaktionstidmätning
+                stimulusShownTime = Date.now();
+
+                // 6. Spara den aktuella symbolen som "föregående" för nästa runda
+                previousShape = currentShape;
+                previousColor = currentColor;
+
+                // 7. Schemalägg att tömma symbolen
+                timeoutId = setTimeout(clearStimulus, displayDuration);
+            }
+
+            function clearStimulus() {
+                if (!testRunning) return;
+
+                stimulusDisplay.html('');
+                stimulusDisplay.removeClass('correct incorrect');
+
+                timeoutId = setTimeout(displayStimulus, interStimulusInterval);
+            }
+
+
+            function handleSpacebarPress() {
+                if (!testRunning) return;
+
+                const responseTime = Date.now() - stimulusShownTime; // Reaktionstid i ms
+                const timeInTestSeconds = (Date.now() - testStartTime) / 1000; // Tid i test i sekunder
+
+                if (isTarget) {
+                    correctResponses++;
+                    stimulusDisplay.addClass('correct');
+                    targetOccurredThisRound = true;
+                    // Lägg till korrekt svar i diagramdata
+                    if (responseTime > 0 && responseTime < 2000) {
+                        chartDataCorrect.push({ x: timeInTestSeconds, y: responseTime });
+                    }
+                } else {
+                    incorrectResponses++;
+                    stimulusDisplay.addClass('incorrect');
+                    // Lägg till felaktigt svar i diagramdata
+                    if (responseTime > 0 && responseTime < 2000) {
+                        chartDataIncorrect.push({ x: timeInTestSeconds, y: responseTime });
+                    }
+                }
+                updateScoreDisplay();
+
+                // *** NY RAD HÄR: Uppdatera diagrammet direkt efter att data lagts till ***
+                // Vi måste också se till att diagrammet är SKAPAT innan vi försöker uppdatera det.
+                // Om testet är igång, och diagrammet inte är skapat (vid första svaret), skapa det.
+                if (!reactionChart && testRunning) { // Om diagrammet inte finns och testet körs
+                    chartContainer.show(); // Se till att containern är synlig
+                    createChart(); // Skapa diagrammet
+                } else if (reactionChart) { // Om diagrammet redan finns, uppdatera det bara
+                    updateChart();
+                }
+                // **********************************************************************
+
+                setTimeout(() => {
+                    stimulusDisplay.removeClass('correct incorrect');
+                }, 200);
+            }
+
+            function updateScoreDisplay() {
+                correctCountSpan.text(correctResponses);
+                incorrectCountSpan.text(incorrectCountSpan);
+                missedCountSpan.text(missedTargets);
+            }
+
+            function resetTest() {
+                clearTimeout(timeoutId);
+                clearTimeout(testTimerId);
+                testRunning = false;
+                currentShape = '';
+                currentColor = '';
+                previousShape = '';
+                previousColor = '';
+                isTarget = false;
+                correctResponses = 0;
+                incorrectResponses = 0;
+                missedTargets = 0;
+                targetOccurredThisRound = false;
+
+                stimulusShownTime = 0;
+                testStartTime = 0;
+                chartDataCorrect = []; // Rensa data för diagrammet
+                chartDataIncorrect = []; // Rensa data för diagrammet
+
+                stimulusDisplay.html('');
+                stimulusDisplay.removeClass('correct incorrect');
+                updateScoreDisplay();
+                startButton.show();
+                instructions.show();
+                scoreDisplay.hide();
+                chartContainer.hide(); // Dölj diagrammet igen vid reset
+                testDurationMinutesInput.prop('disabled', false);
+
+                if (reactionChart) {
+                    reactionChart.destroy(); // Förstör gamla diagraminstansen
+                    reactionChart = null; // Sätt till null så den kan skapas på nytt
+                }
+            }
+
+            startButton.on('click', function () {
+                const minutes = parseInt(testDurationMinutesInput.val());
+                if (isNaN(minutes) || minutes < 1 || minutes > 10) {
+                    alert('Vänligen ange ett giltigt antal minuter (1-10).');
+                    return;
+                }
+                testDuration = minutes * 60 * 1000; // Konvertera minuter till millisekunder
+
+                startButton.hide();
+                instructions.hide();
+                scoreDisplay.show();
+
+                chartContainer.hide(); // Se till att diagramcontainern är döljd när testet startar
+                chartContainer.css('display', ''); // Rensa eventuell inline display stil
+
+                testRunning = true;
+                correctResponses = 0;
+                incorrectResponses = 0;
+                missedTargets = 0;
+
+                previousShape = '';
+                previousColor = '';
+                updateScoreDisplay();
+
+                testDurationMinutesInput.prop('disabled', true);
+                testStartTime = Date.now(); // Sätt testets starttid
+
+                displayStimulus(); // Start the first stimulus
+                testTimerId = setTimeout(endTest, testDuration);
+            });
+
+            function endTest() {
+                testRunning = false;
+                clearTimeout(timeoutId);
+                stimulusDisplay.html('');
+
+                // Se till att containern är synlig om den inte redan är det
+                // Den bör redan vara synlig om några svar givits, men för säkerhets skull.
+                chartContainer.show();
+
+                // Om inga svar har givits (och därmed inget diagram skapats), skapa det nu
+                if (!reactionChart) {
+                    createChart();
+                }
+                // Uppdatera diagrammet med den slutgiltiga datan
+                updateChart();
+
+                alert(`Testet är klart!
+Rätta svar: ${correctResponses}
+Felaktiga svar: ${incorrectResponses}
+Missade mål: ${missedTargets}`);
+
+                resetTest();
+            }
+
+            $(document).on('keydown', function (e) {
+                if (e.key === ' ' && testRunning) {
+                    e.preventDefault();
+                    handleSpacebarPress();
+                }
+            });
+
+            // Initial state
+            // Se till att diagramcontainern är döljd vid sidladdning
+            chartContainer.hide();
+            resetTest();
+        });
+    </script>
+</body>
+
+</html>
