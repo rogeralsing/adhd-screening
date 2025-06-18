@@ -294,7 +294,9 @@
             <p>Totalt korrekt markerade mål: <span id="total-correct">0</span></p>
             <p>Totalt felaktiga markeringar (kommissioner): <span id="total-incorrect">0</span></p>
             <p>Totalt missade mål (utelämnanden): <span id="total-omissions">0</span></p>
+            <p><strong>Koncentrationsprestanda (KL): <span id="kl-score">0</span></strong></p>
             <p>Noggrannhetspoäng: <span id="accuracy-score">0.00</span>%</p>
+            <p><strong>KL-prestation: <span id="kl-performance-category"></span></strong></p>
             <button onclick="location.reload()">Starta om testet</button>
         </div>
     </div>
@@ -337,10 +339,28 @@
         const totalCorrectSpan = document.getElementById('total-correct');
         const totalIncorrectSpan = document.getElementById('total-incorrect');
         const totalOmissionsSpan = document.getElementById('total-omissions');
+        const klScoreSpan = document.getElementById('kl-score');
         const accuracyScoreSpan = document.getElementById('accuracy-score');
+        const klPerformanceCategorySpan = document.getElementById('kl-performance-category'); // Nytt element
 
         // Sätt defaultvärdet för antal omgångar till 14
         numTurnsInput.value = 14;
+
+        // --- HYPOTETISKA TRÖSKELVÄRDEN FÖR KL-POÄNGEN ---
+        // OBS! Dessa är påhittade värden och motsvarar INTE officiella d2-R T-poängsnormer.
+        // De är endast för att demonstrera funktionen i denna simulering.
+        // I ett riktigt test omvandlas råpoängen (t.ex. KL) till en T-poäng baserat på ålder, kön, utbildning etc.
+        // För detta simulerade test, antar vi att en högre KL-poäng är bättre.
+        const klScoreThresholds = {
+            veryLow: -50,   // Exempel: KL mindre än eller lika med -50
+            low: 50,      // Exempel: KL mellan -49 och 50
+            average: 150,  // Exempel: KL mellan 51 och 150
+            high: 250    // Exempel: KL mellan 151 och 250
+            // Very high är > 250
+        };
+        // Du måste justera dessa 'klScoreThresholds' för att de ska passa de KL-poängintervall
+        // som du tror representerar de olika kategorierna i din simulerade miljö.
+        // Tänk på att KL-poängen kan vara negativ om man gör fler fel än korrekta.
 
 
         function getRandomInt(min, max) {
@@ -491,27 +511,6 @@
             });
         }
 
-        function endTurn(autoAdvance = false) {
-            gameActive = false;
-            clearInterval(timerInterval);
-            evaluateTurn();
-
-            Array.from(symbolRow.children).forEach(s => {
-                s.removeEventListener('click', handleSymbolClick);
-            });
-
-
-            if (currentTurn < totalTurns) {
-                if (!autoAdvance) {
-                    startTurn();
-                } else {
-                    setTimeout(startTurn, 1000);
-                }
-            } else {
-                displayResults();
-            }
-        }
-
         function evaluateTurn() {
             const symbolsInRow = Array.from(symbolRow.children);
 
@@ -540,6 +539,41 @@
             totalOmissions += omissionsInTurn;
         }
 
+        function endTurn(autoAdvance = false) {
+            gameActive = false;
+            clearInterval(timerInterval);
+            evaluateTurn();
+
+            Array.from(symbolRow.children).forEach(s => {
+                s.removeEventListener('click', handleSymbolClick);
+            });
+
+            if (currentTurn < totalTurns) {
+                if (!autoAdvance) {
+                    startTurn();
+                } else {
+                    setTimeout(startTurn, 1000);
+                }
+            } else {
+                displayResults();
+            }
+        }
+
+        // Ny funktion för att kategorisera KL-poängen
+        function getKlPerformanceCategory(klScore) {
+            if (klScore <= klScoreThresholds.veryLow) {
+                return 'Mycket låg';
+            } else if (klScore <= klScoreThresholds.low) {
+                return 'Låg';
+            } else if (klScore <= klScoreThresholds.average) {
+                return 'Genomsnitt';
+            } else if (klScore <= klScoreThresholds.high) {
+                return 'Hög';
+            } else {
+                return 'Mycket hög';
+            }
+        }
+
         function displayResults() {
             gameArea.classList.add('hidden');
             gameInfo.classList.add('hidden');
@@ -552,10 +586,15 @@
                 accuracy = (totalCorrectSelections / totalPossibleTargets) * 100;
             }
 
+            const klScore = totalCorrectSelections - totalIncorrectSelections;
+            const klCategory = getKlPerformanceCategory(klScore); // Hämta kategorin
+
             totalCorrectSpan.textContent = totalCorrectSelections;
             totalIncorrectSpan.textContent = totalIncorrectSelections;
             totalOmissionsSpan.textContent = totalOmissions;
+            klScoreSpan.textContent = klScore;
             accuracyScoreSpan.textContent = accuracy.toFixed(2);
+            klPerformanceCategorySpan.textContent = klCategory; // Visa kategorin
         }
 
         startButton.addEventListener('click', () => {
