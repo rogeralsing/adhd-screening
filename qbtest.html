@@ -116,19 +116,61 @@
         }
 
         #chart-container {
+            /* Stilen har ändrats för att inkludera en fast höjd */
             margin-top: 40px;
             width: 80%;
-            /* Bredden på diagrammet */
             max-width: 800px;
-            /* Maxbredd för diagrammet */
             height: 400px;
-            /* Ange en fast höjd för diagramcontainern */
+            /* Återinförd fast höjd för diagramcontainern */
             background-color: #fff;
             padding: 20px;
             border-radius: 10px;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            /* display: none;  Vi kommer att hantera synligheten via JavaScript */
+            display: none;
+            /* Dölj som standard */
         }
+
+        #results-panel {
+            /* Kombinera stilar för gemensam layout */
+            margin-top: 40px;
+            /* Behåll marginal uppåt */
+            width: 80%;
+            max-width: 800px;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            display: none;
+            /* Dölj som standard */
+            text-align: left;
+            /* Justera texten för resultatpanelen */
+            margin-bottom: 20px;
+            /* Lägg till lite marginal om det är fler element nedan */
+        }
+
+        #results-panel h2 {
+            text-align: center;
+            margin-bottom: 15px;
+        }
+
+        #results-panel p {
+            font-size: 1.1em;
+            margin-bottom: 10px;
+        }
+
+        #results-panel button {
+            display: block;
+            margin: 20px auto 0 auto;
+            /* Centrera knappen */
+            padding: 10px 20px;
+            font-size: 1em;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
 
         #reactionTimeChart {
             width: 100% !important;
@@ -167,6 +209,14 @@
         <canvas id="reactionTimeChart"></canvas>
     </div>
 
+    <div id="results-panel">
+        <h2>Dina Testresultat</h2>
+        <p>Rätta svar: <span id="final-correct-count">0</span></p>
+        <p>Felaktiga svar: <span id="final-incorrect-count">0</span></p>
+        <p>Missade mål: <span id="final-missed-count">0</span></p>
+        <button id="restart-test-button">Starta om testet</button>
+    </div>
+
     <script>
         $(document).ready(function () {
             const stimulusDisplay = $('#stimulus-display');
@@ -178,11 +228,16 @@
             const missedCountSpan = $('#missed-count');
             const testDurationMinutesInput = $('#test-duration-minutes');
             const chartContainer = $('#chart-container'); // Referens till diagram-containern
+            const resultsPanel = $('#results-panel'); // Ny referens till resultatpanelen
+            const finalCorrectCountSpan = $('#final-correct-count'); // För resultatpanelen
+            const finalIncorrectCountSpan = $('#final-incorrect-count'); // För resultatpanelen
+            const finalMissedCountSpan = $('#final-missed-count'); // För resultatpanelen
+            const restartTestButton = $('#restart-test-button'); // För knappen i resultatpanelen
 
             const shapes = ['&#9679;', '&#9632;']; // Cirkel, Fyrkant (Unicode characters)
             const colors = ['red', 'blue'];
 
-            const displayDuration = 1000; // Hur länge symbolen visas (ms)
+            const displayDuration = 300; // Hur länge symbolen visas (ms)
             const interStimulusInterval = 1000; // Hur länge displayen är tom mellan symboler (ms)
 
             let testDuration = 60000; // Standard testtid i ms (1 minut), kommer att uppdateras från input
@@ -376,17 +431,6 @@
                 }
                 updateScoreDisplay();
 
-                // *** NY RAD HÄR: Uppdatera diagrammet direkt efter att data lagts till ***
-                // Vi måste också se till att diagrammet är SKAPAT innan vi försöker uppdatera det.
-                // Om testet är igång, och diagrammet inte är skapat (vid första svaret), skapa det.
-                if (!reactionChart && testRunning) { // Om diagrammet inte finns och testet körs
-                    chartContainer.show(); // Se till att containern är synlig
-                    createChart(); // Skapa diagrammet
-                } else if (reactionChart) { // Om diagrammet redan finns, uppdatera det bara
-                    updateChart();
-                }
-                // **********************************************************************
-
                 setTimeout(() => {
                     stimulusDisplay.removeClass('correct incorrect');
                 }, 200);
@@ -394,7 +438,7 @@
 
             function updateScoreDisplay() {
                 correctCountSpan.text(correctResponses);
-                incorrectCountSpan.text(incorrectCountSpan);
+                incorrectCountSpan.text(incorrectResponses);
                 missedCountSpan.text(missedTargets);
             }
 
@@ -424,6 +468,7 @@
                 instructions.show();
                 scoreDisplay.hide();
                 chartContainer.hide(); // Dölj diagrammet igen vid reset
+                resultsPanel.hide(); // Dölj resultatpanelen vid reset
                 testDurationMinutesInput.prop('disabled', false);
 
                 if (reactionChart) {
@@ -435,7 +480,15 @@
             startButton.on('click', function () {
                 const minutes = parseInt(testDurationMinutesInput.val());
                 if (isNaN(minutes) || minutes < 1 || minutes > 10) {
-                    alert('Vänligen ange ett giltigt antal minuter (1-10).');
+                    // Använd en enklare popup för enkel validering
+                    const validationMessage = $(`<div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); z-index: 1001; text-align: center;">
+                        <p>Vänligen ange ett giltigt antal minuter (1-10).</p>
+                        <button id="close-validation" style="padding: 8px 15px; font-size: 0.9em; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; margin-top: 15px;">OK</button>
+                    </div>`);
+                    $('body').append(validationMessage);
+                    $('#close-validation').on('click', function () {
+                        validationMessage.remove();
+                    });
                     return;
                 }
                 testDuration = minutes * 60 * 1000; // Konvertera minuter till millisekunder
@@ -443,9 +496,8 @@
                 startButton.hide();
                 instructions.hide();
                 scoreDisplay.show();
-
+                resultsPanel.hide(); // Se till att resultatpanelen är döljd när testet startar
                 chartContainer.hide(); // Se till att diagramcontainern är döljd när testet startar
-                chartContainer.css('display', ''); // Rensa eventuell inline display stil
 
                 testRunning = true;
                 correctResponses = 0;
@@ -468,23 +520,23 @@
                 clearTimeout(timeoutId);
                 stimulusDisplay.html('');
 
-                // Se till att containern är synlig om den inte redan är det
-                // Den bör redan vara synlig om några svar givits, men för säkerhets skull.
+                // Se till att diagramcontainern är synlig om den inte redan är det
                 chartContainer.show();
 
-                // Om inga svar har givits (och därmed inget diagram skapats), skapa det nu
-                if (!reactionChart) {
-                    createChart();
-                }
-                // Uppdatera diagrammet med den slutgiltiga datan
+                // Skapa diagrammet (om det inte redan finns) och uppdatera det med all data
+                // Detta säkerställer att diagrammet alltid skapas/återskapas med den slutliga datan.
+                createChart();
                 updateChart();
 
-                alert(`Testet är klart!
-Rätta svar: ${correctResponses}
-Felaktiga svar: ${incorrectResponses}
-Missade mål: ${missedTargets}`);
+                // Uppdatera resultatpanelen med de slutliga värdena
+                finalCorrectCountSpan.text(correctResponses);
+                finalIncorrectCountSpan.text(incorrectResponses);
+                finalMissedCountSpan.text(missedTargets);
+                resultsPanel.show(); // Visa resultatpanelen
 
-                resetTest();
+                // Lägg till eventlyssnare för "Starta om testet" -knappen
+                restartTestButton.off('click').on('click', resetTest); // Använd .off() för att undvika dubbla lyssnare
+
             }
 
             $(document).on('keydown', function (e) {
@@ -495,8 +547,8 @@ Missade mål: ${missedTargets}`);
             });
 
             // Initial state
-            // Se till att diagramcontainern är döljd vid sidladdning
             chartContainer.hide();
+            resultsPanel.hide(); // Dölj resultatpanelen vid sidladdning
             resetTest();
         });
     </script>
