@@ -192,7 +192,7 @@
 
         <div class="control-group">
             <label for="test-duration-minutes">Testlängd (minuter):</label>
-            <input type="number" id="test-duration-minutes" value="1" min="1" max="10">
+            <input type="number" id="test-duration-minutes" value="5" min="1" max="20">
         </div>
 
         <button id="start-button">Starta Test</button>
@@ -235,9 +235,9 @@
             const restartTestButton = $('#restart-test-button'); // För knappen i resultatpanelen
 
             const shapes = ['&#9679;', '&#9632;']; // Cirkel, Fyrkant (Unicode characters)
-            const colors = ['red', 'blue'];
+            const colors = ['#ff5050', '#5030ff'];
 
-            const displayDuration = 300; // Hur länge symbolen visas (ms)
+            const displayDuration = 500; // Hur länge symbolen visas (ms)
             const interStimulusInterval = 1000; // Hur länge displayen är tom mellan symboler (ms)
 
             let testDuration = 60000; // Standard testtid i ms (1 minut), kommer att uppdateras från input
@@ -479,7 +479,7 @@
 
             startButton.on('click', function () {
                 const minutes = parseInt(testDurationMinutesInput.val());
-                if (isNaN(minutes) || minutes < 1 || minutes > 10) {
+                if (isNaN(minutes) || minutes < 1 || minutes > 20) {
                     // Använd en enklare popup för enkel validering
                     const validationMessage = $(`<div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); z-index: 1001; text-align: center;">
                         <p>Vänligen ange ett giltigt antal minuter (1-10).</p>
