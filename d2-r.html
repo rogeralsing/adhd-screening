@@ -240,9 +240,9 @@
 
         <div class="instructions" id="instructions-panel">
             <p><strong>Instruktioner:</strong></p>
-            <p>Din uppgift är att hitta och klicka på alla 'd'-symboler som har **EXAKT TVÅ linjer**. Linjerna kan vara
-                ovanför, under, eller en ovanför och en under symbolen.</p>
-            <p>Varje linje representeras av bokstaven "I". Så, en 'd'-symbol som är ett mål ser ut så här:</p>
+            <p>Din uppgift är att hitta och klicka på alla 'd'-symboler som har **EXAKT TVÅ streck**. Strecken kan vara
+                ovanför, under, eller ett ovanför och ett under symbolen.</p>
+            <p>Varje streck representeras av bokstaven "I". Så, en 'd'-symbol som är ett mål ser ut så här:</p>
 
             <div class="instruction-examples">
                 <div class="symbol">
@@ -262,14 +262,15 @@
                 </div>
             </div>
 
-            <p>Ignorera alla 'd'-symboler med en eller tre linjer, och alla 'p'-symboler oavsett antal linjer.</p>
+            <p>Ignorera alla 'd'-symboler med ett eller tre streck, och alla 'p'-symboler oavsett antal streck. **Alla
+                symboler har minst ett streck.**</p>
             <p>Varje omgång varar i 20 sekunder. En progressbar visar hur mycket tid som återstår.</p>
             <p>Klicka på "Starta Spel" för att börja!</p>
         </div>
 
         <div id="turn-config">
             <label for="num-turns">Antal omgångar:</label>
-            <input type="number" id="num-turns" value="14" min="1" max="25">
+            <input type="number" id="num-turns" value="14" min="1" max="25" readonly>
         </div>
 
         <div class="game-info hidden" id="game-info">
@@ -297,21 +298,22 @@
             <p><strong>Koncentrationsprestanda (KL): <span id="kl-score">0</span></strong></p>
             <p>Noggrannhetspoäng: <span id="accuracy-score">0.00</span>%</p>
             <p><strong>KL-prestation: <span id="kl-performance-category"></span></strong></p>
+            <p class="disclaimer"><em>(Kategorierna är baserade på hypotetiska tröskelvärden för denna simulering och
+                    bör inte tolkas som officiella T-poäng från det riktiga d2-R-testet.)</em></p>
             <button onclick="location.reload()">Starta om testet</button>
         </div>
     </div>
 
     <script>
         const symbols = ['d', 'p'];
-        const dashCounts = [1, 2, 3]; // Antal linjer
         const turnDuration = 20; // sekunder
-        const symbolsPerTurn = 60; // Ändrat från 47 till 60
+        const symbolsPerTurn = 60; // Antal symboler per omgång
 
-        // Ny konstant för att kontrollera frekvensen av målsymboler
-        const targetFrequency = 0.349; // 34.9%
+        const TOTAL_TARGETS_REAL_TEST = 293; // Antal mål i det riktiga d2-R-testet
+        const FIXED_TURNS = 14;             // Antal omgångar i det riktiga d2-R-testet
 
         let currentTurn = 0;
-        let totalTurns = 0;
+        let totalTurns = FIXED_TURNS;
         let timerInterval;
         let timeLeft;
         let gameActive = false;
@@ -321,6 +323,8 @@
         let totalCorrectSelections = 0;
         let totalIncorrectSelections = 0;
         let totalOmissions = 0;
+
+        let targetsPerTurnArray = [];
 
         const startButton = document.getElementById('start-game-btn');
         const nextTurnButton = document.getElementById('next-turn-btn');
@@ -335,95 +339,131 @@
         const numTurnsInput = document.getElementById('num-turns');
         const turnConfigDiv = document.getElementById('turn-config');
 
-        // Resultatelement
         const totalCorrectSpan = document.getElementById('total-correct');
         const totalIncorrectSpan = document.getElementById('total-incorrect');
         const totalOmissionsSpan = document.getElementById('total-omissions');
         const klScoreSpan = document.getElementById('kl-score');
         const accuracyScoreSpan = document.getElementById('accuracy-score');
-        const klPerformanceCategorySpan = document.getElementById('kl-performance-category'); // Nytt element
+        const klPerformanceCategorySpan = document.getElementById('kl-performance-category');
 
-        // Sätt defaultvärdet för antal omgångar till 14
-        numTurnsInput.value = 14;
+        numTurnsInput.value = FIXED_TURNS;
+        numTurnsInput.readOnly = true;
 
-        // --- HYPOTETISKA TRÖSKELVÄRDEN FÖR KL-POÄNGEN ---
-        // OBS! Dessa är påhittade värden och motsvarar INTE officiella d2-R T-poängsnormer.
-        // De är endast för att demonstrera funktionen i denna simulering.
-        // I ett riktigt test omvandlas råpoängen (t.ex. KL) till en T-poäng baserat på ålder, kön, utbildning etc.
-        // För detta simulerade test, antar vi att en högre KL-poäng är bättre.
         const klScoreThresholds = {
-            veryLow: -50,   // Exempel: KL mindre än eller lika med -50
-            low: 50,      // Exempel: KL mellan -49 och 50
-            average: 150,  // Exempel: KL mellan 51 och 150
-            high: 250    // Exempel: KL mellan 151 och 250
-            // Very high är > 250
+            veryLow: 100,
+            low: 150,
+            average: 200,
+            high: 250
         };
-        // Du måste justera dessa 'klScoreThresholds' för att de ska passa de KL-poängintervall
-        // som du tror representerar de olika kategorierna i din simulerade miljö.
-        // Tänk på att KL-poängen kan vara negativ om man gör fler fel än korrekta.
-
 
         function getRandomInt(min, max) {
             return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
         }
 
         function generateLines(count) {
             return 'I'.repeat(count);
         }
 
-        function generateSymbol() {
-            let char;
+        // Genererar en målsymbol: 'd' med exakt 2 streck totalt
+        // Strecken kan vara 2 ovan, 2 under, eller 1 ovan + 1 under
+        function generateTargetSymbolData() {
             let topLinesCount = 0;
             let bottomLinesCount = 0;
-            let totalLines;
-            let isTarget;
+            const distribution = getRandomInt(0, 2); // 0: 2 top, 1: 1 top + 1 bottom, 2: 2 bottom
 
-            // Steg 1: Bestäm om det ska vara en målsymbol (d med 2 linjer)
-            if (Math.random() < targetFrequency) {
-                isTarget = true;
-                char = 'd';
-                totalLines = 2; // Måste ha exakt 2 linjer
-                // Fördela de 2 linjerna slumpmässigt
-                const distribution = getRandomInt(0, 2); // 0: 2 top, 0 bottom; 1: 1 top, 1 bottom; 2: 0 top, 2 bottom
+            if (distribution === 0) { // 2 streck ovan
+                topLinesCount = 2;
+            } else if (distribution === 1) { // 1 streck ovan, 1 streck under
+                topLinesCount = 1;
+                bottomLinesCount = 1;
+            } else { // 2 streck under
+                bottomLinesCount = 2;
+            }
+            return { char: 'd', topLinesCount, bottomLinesCount, isTarget: true };
+        }
+
+        // Genererar en icke-målsymbol enligt d2-R regler
+        // Alla symboler ska ha minst 1 streck.
+        // 'd' som icke-mål: 1 streck (ovan eller under)
+        // 'p' som icke-mål: 1 eller 2 streck (fördelat slumpmässigt)
+        function generateNonTargetSymbolData() {
+            let char = (Math.random() < 0.5) ? 'd' : 'p'; // 50/50 chans för 'd' eller 'p'
+            let totalLines;
+
+            if (char === 'd') {
+                // För 'd' som inte är mål: måste ha 1 streck.
+                totalLines = 1;
+            } else { // char === 'p'
+                // För 'p': kan ha 1 eller 2 streck.
+                totalLines = getRandomInt(1, 2); // 1 eller 2 streck
+            }
+
+            let topLinesCount = 0;
+            let bottomLinesCount = 0;
+
+            if (totalLines === 1) {
+                // Ett streck, antingen ovan eller under
+                if (Math.random() < 0.5) { topLinesCount = 1; }
+                else { bottomLinesCount = 1; }
+            } else { // totalLines === 2 (endast för 'p')
+                // Två streck, fördelat som 2 ovan, 2 under, eller 1+1
+                const distribution = getRandomInt(0, 2); // 0: 2 top, 1: 1 top + 1 bottom, 2: 2 bottom
                 if (distribution === 0) { topLinesCount = 2; }
                 else if (distribution === 1) { topLinesCount = 1; bottomLinesCount = 1; }
                 else { bottomLinesCount = 2; }
-            } else {
-                // Steg 2: Om det INTE är en målsymbol, generera en icke-målsymbol
-                isTarget = false;
+            }
+            return { char, topLinesCount, bottomLinesCount, isTarget: false };
+        }
 
-                // Slumpa först vilken typ av icke-målsymbol det ska vara
-                // En 'd' med 1 eller 3 linjer, eller en 'p' med 1, 2 eller 3 linjer
-                const nonTargetType = getRandomInt(0, 1); // 0 för 'd', 1 för 'p'
+        function initializeTargetsPerTurn() {
+            targetsPerTurnArray = Array(FIXED_TURNS).fill(0);
+            let currentTotalTargets = 0;
 
-                if (nonTargetType === 0) { // En 'd' som inte är ett mål
-                    char = 'd';
-                    // Måste ha 1 eller 3 linjer
-                    totalLines = Math.random() < 0.5 ? 1 : 3;
-                } else { // En 'p'
-                    char = 'p';
-                    // Kan ha 1, 2 eller 3 linjer
-                    totalLines = dashCounts[getRandomInt(0, 2)];
-                }
+            const baseTargets = Math.floor(TOTAL_TARGETS_REAL_TEST / FIXED_TURNS);
+            let remainderTargets = TOTAL_TARGETS_REAL_TEST % FIXED_TURNS;
 
-                // Fördela linjerna för icke-målsymboler
-                if (totalLines === 1) {
-                    if (Math.random() < 0.5) { topLinesCount = 1; }
-                    else { bottomLinesCount = 1; }
-                } else if (totalLines === 2) {
-                    const distribution = getRandomInt(0, 2);
-                    if (distribution === 0) { topLinesCount = 2; }
-                    else if (distribution === 1) { topLinesCount = 1; bottomLinesCount = 1; }
-                    else { bottomLinesCount = 2; }
-                } else { // totalLines === 3
-                    const distribution = getRandomInt(0, 3);
-                    if (distribution === 0) { topLinesCount = 2; bottomLinesCount = 1; }
-                    else if (distribution === 1) { topLinesCount = 1; bottomLinesCount = 2; }
-                    else if (distribution === 2) { topLinesCount = 3; }
-                    else { bottomLinesCount = 3; }
+            for (let i = 0; i < FIXED_TURNS; i++) {
+                targetsPerTurnArray[i] = baseTargets;
+                if (remainderTargets > 0) {
+                    targetsPerTurnArray[i]++;
+                    remainderTargets--;
                 }
             }
-            return { char, topLinesCount, bottomLinesCount, isTarget };
+
+            for (let k = 0; k < FIXED_TURNS * 2; k++) {
+                const idx1 = getRandomInt(0, FIXED_TURNS - 1);
+                let idx2 = getRandomInt(0, FIXED_TURNS - 1);
+
+                while (idx1 === idx2) {
+                    idx2 = getRandomInt(0, FIXED_TURNS - 1);
+                }
+
+                const minTargetsPerTurn = 15;
+                const maxTargetsPerTurn = 25;
+
+                if (targetsPerTurnArray[idx1] > minTargetsPerTurn && targetsPerTurnArray[idx2] < maxTargetsPerTurn) {
+                    targetsPerTurnArray[idx1]--;
+                    targetsPerTurnArray[idx2]++;
+                } else if (targetsPerTurnArray[idx2] > minTargetsPerTurn && targetsPerTurnArray[idx1] < maxTargetsPerTurn) {
+                    targetsPerTurnArray[idx2]--;
+                    targetsPerTurnArray[idx1]++;
+                }
+            }
+
+            const sumCheck = targetsPerTurnArray.reduce((sum, val) => sum + val, 0);
+            console.log("Mål per omgång (efter justering):", targetsPerTurnArray);
+            console.log("Totala mål efter justering:", sumCheck);
+            if (sumCheck !== TOTAL_TARGETS_REAL_TEST) {
+                console.error("Fel! Målsumman stämmer inte: ", sumCheck, "istället för", TOTAL_TARGETS_REAL_TEST);
+            }
         }
 
         function renderSymbolRow() {
@@ -431,35 +471,49 @@
             turnTargets = [];
             turnSelections = new Set();
 
-            for (let i = 0; i < symbolsPerTurn; i++) {
-                const { char, topLinesCount, bottomLinesCount, isTarget } = generateSymbol();
+            const numTargetsInThisTurn = targetsPerTurnArray[currentTurn - 1];
+
+            let symbolsToRender = [];
+
+            for (let i = 0; i < numTargetsInThisTurn; i++) {
+                symbolsToRender.push(generateTargetSymbolData());
+            }
+
+            const numNonTargetsInThisTurn = symbolsPerTurn - numTargetsInThisTurn;
+            for (let i = 0; i < numNonTargetsInThisTurn; i++) {
+                symbolsToRender.push(generateNonTargetSymbolData());
+            }
+
+            shuffleArray(symbolsToRender);
+
+            symbolsToRender.forEach((symbolData, i) => {
                 const symbolDiv = document.createElement('div');
                 symbolDiv.classList.add('symbol');
                 symbolDiv.dataset.index = i;
-                symbolDiv.dataset.isTarget = isTarget;
+                symbolDiv.dataset.isTarget = symbolData.isTarget;
 
                 const topLinesDiv = document.createElement('div');
                 topLinesDiv.classList.add('line-segment');
-                topLinesDiv.textContent = generateLines(topLinesCount);
+                topLinesDiv.textContent = generateLines(symbolData.topLinesCount);
                 symbolDiv.appendChild(topLinesDiv);
 
                 const charDiv = document.createElement('div');
                 charDiv.classList.add('main-char');
-                charDiv.textContent = char;
+                charDiv.textContent = symbolData.char;
                 symbolDiv.appendChild(charDiv);
 
                 const bottomLinesDiv = document.createElement('div');
                 bottomLinesDiv.classList.add('line-segment');
-                bottomLinesDiv.textContent = generateLines(bottomLinesCount);
+                bottomLinesDiv.textContent = generateLines(symbolData.bottomLinesCount);
                 symbolDiv.appendChild(bottomLinesDiv);
 
                 symbolDiv.addEventListener('click', () => handleSymbolClick(symbolDiv, i));
                 symbolRow.appendChild(symbolDiv);
 
-                if (isTarget) {
+                if (symbolData.isTarget) {
                     turnTargets.push(i);
                 }
-            }
+            });
         }
 
         function handleSymbolClick(symbolDiv, index) {
@@ -559,7 +613,6 @@
             }
         }
 
-        // Ny funktion för att kategorisera KL-poängen
         function getKlPerformanceCategory(klScore) {
             if (klScore <= klScoreThresholds.veryLow) {
                 return 'Mycket låg';
@@ -580,35 +633,30 @@
             nextTurnButton.classList.add('hidden');
             resultsPanel.classList.remove('hidden');
 
-            const totalPossibleTargets = totalCorrectSelections + totalOmissions;
+            const totalPossibleTargets = TOTAL_TARGETS_REAL_TEST;
             let accuracy = 0;
             if (totalPossibleTargets > 0) {
                 accuracy = (totalCorrectSelections / totalPossibleTargets) * 100;
             }
 
             const klScore = totalCorrectSelections - totalIncorrectSelections;
-            const klCategory = getKlPerformanceCategory(klScore); // Hämta kategorin
+            const klCategory = getKlPerformanceCategory(klScore);
 
             totalCorrectSpan.textContent = totalCorrectSelections;
             totalIncorrectSpan.textContent = totalIncorrectSelections;
             totalOmissionsSpan.textContent = totalOmissions;
             klScoreSpan.textContent = klScore;
             accuracyScoreSpan.textContent = accuracy.toFixed(2);
-            klPerformanceCategorySpan.textContent = klCategory; // Visa kategorin
+            klPerformanceCategorySpan.textContent = klCategory;
         }
 
         startButton.addEventListener('click', () => {
-            totalTurns = parseInt(numTurnsInput.value);
-            if (isNaN(totalTurns) || totalTurns <= 0) {
-                alert('Ange ett giltigt antal omgångar (minst 1).');
-                return;
-            }
-
             instructionsPanel.classList.add('hidden');
             turnConfigDiv.classList.add('hidden');
             gameArea.classList.remove('hidden');
             gameInfo.classList.remove('hidden');
             totalTurnsSpan.textContent = totalTurns;
+            initializeTargetsPerTurn();
             startTurn();
         });
 
