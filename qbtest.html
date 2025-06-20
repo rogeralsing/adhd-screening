@@ -12,14 +12,12 @@
             font-family: Arial, sans-serif;
             display: flex;
             flex-direction: column;
-            /* Använd kolumn för att stapla element vertikalt */
             justify-content: center;
             align-items: center;
             min-height: 100vh;
             background-color: #f0f0f0;
             margin: 0;
             overflow-x: hidden;
-            /* Förhindra horisontell scrollbar */
         }
 
         #container {
@@ -29,11 +27,8 @@
             border-radius: 10px;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
             margin-bottom: 20px;
-            /* Lägg till marginal mellan container och diagram */
             width: 90%;
-            /* Ge container en bredd */
             max-width: 600px;
-            /* Begränsa maxbredden */
         }
 
         #stimulus-display {
@@ -45,9 +40,7 @@
             justify-content: center;
             align-items: center;
             font-size: 8em;
-            /* Adjust for shapes */
             color: black;
-            /* Default color, will be overridden */
         }
 
         #instructions {
@@ -73,7 +66,6 @@
             border: 1px solid #ccc;
             border-radius: 4px;
             width: 80px;
-            /* Make it a bit wider */
             text-align: center;
         }
 
@@ -102,7 +94,6 @@
             font-size: 1.2em;
             color: #555;
             display: none;
-            /* Hidden until test ends */
         }
 
         .correct {
@@ -116,24 +107,19 @@
         }
 
         #chart-container {
-            /* Stilen har ändrats för att inkludera en fast höjd */
             margin-top: 40px;
             width: 80%;
             max-width: 800px;
             height: 400px;
-            /* Återinförd fast höjd för diagramcontainern */
             background-color: #fff;
             padding: 20px;
             border-radius: 10px;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
             display: none;
-            /* Dölj som standard */
         }
 
         #results-panel {
-            /* Kombinera stilar för gemensam layout */
             margin-top: 40px;
-            /* Behåll marginal uppåt */
             width: 80%;
             max-width: 800px;
             background-color: #fff;
@@ -141,11 +127,8 @@
             border-radius: 10px;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
             display: none;
-            /* Dölj som standard */
             text-align: left;
-            /* Justera texten för resultatpanelen */
             margin-bottom: 20px;
-            /* Lägg till lite marginal om det är fler element nedan */
         }
 
         #results-panel h2 {
@@ -161,7 +144,6 @@
         #results-panel button {
             display: block;
             margin: 20px auto 0 auto;
-            /* Centrera knappen */
             padding: 10px 20px;
             font-size: 1em;
             background-color: #007bff;
@@ -174,9 +156,7 @@
 
         #reactionTimeChart {
             width: 100% !important;
-            /* Säkerställ att canvasen fyller sin container */
             height: 100% !important;
-            /* Säkerställ att canvasen fyller sin container */
         }
     </style>
 </head>
@@ -227,18 +207,18 @@
             const incorrectCountSpan = $('#incorrect-count');
             const missedCountSpan = $('#missed-count');
             const testDurationMinutesInput = $('#test-duration-minutes');
-            const chartContainer = $('#chart-container'); // Referens till diagram-containern
-            const resultsPanel = $('#results-panel'); // Ny referens till resultatpanelen
-            const finalCorrectCountSpan = $('#final-correct-count'); // För resultatpanelen
-            const finalIncorrectCountSpan = $('#final-incorrect-count'); // För resultatpanelen
-            const finalMissedCountSpan = $('#final-missed-count'); // För resultatpanelen
-            const restartTestButton = $('#restart-test-button'); // För knappen i resultatpanelen
+            const chartContainer = $('#chart-container');
+            const resultsPanel = $('#results-panel');
+            const finalCorrectCountSpan = $('#final-correct-count');
+            const finalIncorrectCountSpan = $('#final-incorrect-count');
+            const finalMissedCountSpan = $('#final-missed-count');
+            const restartTestButton = $('#restart-test-button');
 
             const shapes = ['&#9679;', '&#9632;']; // Cirkel, Fyrkant (Unicode characters)
             const colors = ['#ff5050', '#5030ff'];
 
             const displayDuration = 200; // Hur länge symbolen visas (ms)
-            const interStimulusInterval = 1800; // Hur länge displayen är tom mellan symboler (ms)
+            // BORTTAGEN: const interStimulusInterval = 1800; // Denna rad har tagits bort.
 
             let testDuration = 60000; // Standard testtid i ms (1 minut), kommer att uppdateras från input
             const targetProbability = 0.3; // Probability of a target appearing
@@ -264,6 +244,12 @@
             let chartDataCorrect = []; // För reaktionstider för korrekta svar
             let chartDataIncorrect = []; // För reaktionstider för felaktiga svar
             let reactionChart; // Variabel för att hålla Chart.js-instansen
+
+            // --- NY FUNKTION: Genererar ett slumpmässigt tidsintervall ---
+            function getRandomInterStimulusInterval() {
+                // Returnerar ett slumpmässigt heltal mellan 200 och 1800 (inklusive)
+                return Math.floor(Math.random() * (1800 - 200 + 1)) + 200;
+            }
 
             // --- Diagramfunktioner ---
             function createChart() {
@@ -403,7 +389,8 @@
                 stimulusDisplay.html('');
                 stimulusDisplay.removeClass('correct incorrect');
 
-                timeoutId = setTimeout(displayStimulus, interStimulusInterval);
+                // ÄNDRAD: Använder den nya funktionen för slumpmässigt intervall här
+                timeoutId = setTimeout(displayStimulus, getRandomInterStimulusInterval());
             }
 
 
@@ -482,7 +469,7 @@
                 if (isNaN(minutes) || minutes < 1 || minutes > 20) {
                     // Använd en enklare popup för enkel validering
                     const validationMessage = $(`<div style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); z-index: 1001; text-align: center;">
-                        <p>Vänligen ange ett giltigt antal minuter (1-10).</p>
+                        <p>Vänligen ange ett giltigt antal minuter (1-20).</p>
                         <button id="close-validation" style="padding: 8px 15px; font-size: 0.9em; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; margin-top: 15px;">OK</button>
                     </div>`);
                     $('body').append(validationMessage);
