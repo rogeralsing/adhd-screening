@@ -41,6 +41,8 @@
             align-items: center;
             font-size: 8em;
             color: black;
+            cursor: pointer;
+            /* Lägg till en pekare för att indikera klickbarhet */
         }
 
         #instructions {
@@ -166,7 +168,8 @@
         <h1>Enkel Uppmärksamhetsuppgift</h1>
         <div id="instructions">
             <p>När testet startar kommer former att visas en efter en.</p>
-            <p><strong>Tryck på MELLANSLAG endast när du ser samma form och färg upprepas i följd.</strong></p>
+            <p><strong>Tryck på MELLANSLAG eller KLICKA i rutan när du ser samma form och färg upprepas i
+                    följd.</strong></p>
             <p>Försök att vara så snabb och korrekt som möjligt.</p>
         </div>
 
@@ -218,7 +221,6 @@
             const colors = ['#ff5050', '#5030ff'];
 
             const displayDuration = 200; // Hur länge symbolen visas (ms)
-            // BORTTAGEN: const interStimulusInterval = 1800; // Denna rad har tagits bort.
 
             let testDuration = 60000; // Standard testtid i ms (1 minut), kommer att uppdateras från input
             const targetProbability = 0.3; // Probability of a target appearing
@@ -248,7 +250,6 @@
             // --- NY FUNKTION: Genererar ett slumpmässigt tidsintervall ---
             function getRandomInterStimulusInterval() {
                 // Returnerar ett slumpmässigt heltal mellan 800 och 1800 (inklusive)
-                // return Math.floor(Math.random() * (1800 - 800 + 1)) + 800;
                 return 1800;
             }
 
@@ -394,8 +395,8 @@
                 timeoutId = setTimeout(displayStimulus, getRandomInterStimulusInterval());
             }
 
-
-            function handleSpacebarPress() {
+            // DENNA FUNKTION HANTERAR BÅDE MELLANSLAG OCH MUSKLICK
+            function handleUserResponse() {
                 if (!testRunning) return;
 
                 const responseTime = Date.now() - stimulusShownTime; // Reaktionstid i ms
@@ -527,10 +528,18 @@
 
             }
 
+            // Hantera mellanslagstryck
             $(document).on('keydown', function (e) {
                 if (e.key === ' ' && testRunning) {
-                    e.preventDefault();
-                    handleSpacebarPress();
+                    e.preventDefault(); // Förhindra standardbeteendet (t.ex. scrollning)
+                    handleUserResponse(); // Kalla den gemensamma hanteringsfunktionen
+                }
+            });
+
+            // Hantera musklick på stimulus-displayen
+            stimulusDisplay.on('click', function () {
+                if (testRunning) {
+                    handleUserResponse(); // Kalla den gemensamma hanteringsfunktionen
                 }
             });
 
